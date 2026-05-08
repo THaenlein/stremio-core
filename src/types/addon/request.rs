@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use url::Url;
 
 use crate::{
-    constants::CATALOG_RESOURCE_NAME,
+    constants::{CATALOG_RESOURCE_NAME, CINEMETA_URL, META_RESOURCE_NAME},
     types::addon::{Descriptor, ExtraProp, ManifestResource},
 };
 
@@ -159,6 +159,7 @@ pub enum AggrRequest<'a> {
     AllCatalogs {
         extra: &'a Vec<ExtraValue>,
         r#type: &'a Option<String>,
+        language: Option<&'a str>,
     },
     CatalogsFiltered(Vec<ExtraType>),
     AllOfResource(ResourcePath),
@@ -167,7 +168,11 @@ pub enum AggrRequest<'a> {
 impl AggrRequest<'_> {
     pub fn plan<'a>(&self, addons: &'a [Descriptor]) -> Vec<(&'a Descriptor, ResourceRequest)> {
         match &self {
-            AggrRequest::AllCatalogs { extra, r#type } => addons
+            AggrRequest::AllCatalogs {
+                extra,
+                r#type,
+                language,
+            } => addons
                 .iter()
                 .flat_map(|addon| {
                     addon
@@ -182,6 +187,18 @@ impl AggrRequest<'_> {
                                     .unwrap_or(true)
                         })
                         .map(move |catalog| {
+                            let mut request_extra = (*extra).to_owned();
+                            if addon.transport_url == *CINEMETA_URL {
+                                if let Some(language) = language.filter(|language| !language.is_empty())
+                                {
+                                    if !request_extra.iter().any(|extra| extra.name == "language") {
+                                        request_extra.push(ExtraValue {
+                                            name: "language".to_owned(),
+                                            value: language.to_owned(),
+                                        });
+                                    }
+                                }
+                            }
                             (
                                 addon,
                                 ResourceRequest::new(
@@ -190,7 +207,7 @@ impl AggrRequest<'_> {
                                         CATALOG_RESOURCE_NAME,
                                         &catalog.r#type,
                                         &catalog.id,
-                                        extra,
+                                        &request_extra,
                                     ),
                                 ),
                             )
@@ -360,9 +377,24 @@ impl AggrRequest<'_> {
                 .iter()
                 .filter(|addon| addon.manifest.is_resource_supported(path))
                 .map(|addon| {
+                    let addon_path = if path.resource == META_RESOURCE_NAME
+                        && addon.transport_url != *CINEMETA_URL
+                    {
+                        ResourcePath {
+                            extra: path
+                                .extra
+                                .iter()
+                                .filter(|extra| extra.name != "language")
+                                .cloned()
+                                .collect(),
+                            ..path.to_owned()
+                        }
+                    } else {
+                        path.to_owned()
+                    };
                     (
                         addon,
-                        ResourceRequest::new(addon.transport_url.to_owned(), path.to_owned()),
+                        ResourceRequest::new(addon.transport_url.to_owned(), addon_path),
                     )
                 })
                 .collect(),

@@ -7,7 +7,7 @@ use num::rational::Ratio;
 use url::Url;
 
 use crate::constants::{
-    BASE64, CREDITS_THRESHOLD_COEF, META_RESOURCE_NAME, PLAYER_IGNORE_SEEK_AFTER,
+    BASE64, CINEMETA_URL, CREDITS_THRESHOLD_COEF, META_RESOURCE_NAME, PLAYER_IGNORE_SEEK_AFTER,
     STREAM_RESOURCE_NAME, SUBTITLES_RESOURCE_NAME, VIDEO_FILENAME_EXTRA_PROP,
     VIDEO_HASH_EXTRA_PROP, VIDEO_SIZE_EXTRA_PROP, WATCHED_THRESHOLD_COEF,
 };
@@ -19,7 +19,9 @@ use crate::models::common::{
 use crate::models::ctx::{Ctx, CtxError};
 use crate::runtime::msg::{Action, ActionLoad, ActionPlayer, Event, Internal, Msg};
 use crate::runtime::{Effect, EffectFuture, Effects, Env, EnvError, EnvFutureExt, UpdateWithCtx};
-use crate::types::addon::{AggrRequest, Descriptor, ExtraExt, ResourcePath, ResourceRequest};
+use crate::types::addon::{
+    AggrRequest, Descriptor, ExtraExt, ExtraValue, ResourcePath, ResourceRequest,
+};
 use crate::types::api::{
     fetch_api, APIRequest, APIResult, SeekLog, SeekLogRequest, SkipGapsRequest, SkipGapsResponse,
     SuccessResponse,
@@ -138,6 +140,23 @@ impl<E: Env + 'static> UpdateWithCtx<E> for Player {
     fn update(&mut self, msg: &Msg, ctx: &Ctx) -> Effects {
         match msg {
             Msg::Action(Action::Load(ActionLoad::Player(selected))) => {
+                let mut selected = *selected.to_owned();
+                if let Some(meta_request) = selected.meta_request.as_mut() {
+                    if meta_request.path.resource == META_RESOURCE_NAME
+                        && meta_request.base == *CINEMETA_URL
+                        && !ctx.profile.settings.interface_language.is_empty()
+                        && !meta_request
+                            .path
+                            .extra
+                            .iter()
+                            .any(|extra| extra.name == "language")
+                    {
+                        meta_request.path.extra.push(ExtraValue {
+                            name: "language".to_owned(),
+                            value: ctx.profile.settings.interface_language.to_owned(),
+                        });
+                    }
+                }
                 // make sure we send the correct Trakt event if the model hasn't been unloaded
                 let trakt_event_effects = if self.selected.is_some() {
                     Effects::msg(Msg::Event(Event::TraktPaused {
@@ -161,7 +180,7 @@ impl<E: Env + 'static> UpdateWithCtx<E> for Player {
                 } else {
                     Effects::none().unchanged()
                 };
-                let selected_effects = eq_update(&mut self.selected, Some(*selected.to_owned()));
+                let selected_effects = eq_update(&mut self.selected, Some(selected.to_owned()));
                 let meta_item_effects = match &selected.meta_request {
                     Some(meta_request) => match &mut self.meta_item {
                         Some(meta_item) => resource_update::<E, _>(

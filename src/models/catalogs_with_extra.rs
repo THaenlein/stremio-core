@@ -173,6 +173,7 @@ fn catalogs_update<E: Env + 'static>(
             let request = AggrRequest::AllCatalogs {
                 extra: &selected.extra,
                 r#type: &selected.r#type,
+                language: Some(profile.settings.interface_language.as_str()),
             };
             request
                 .plan(&profile.addons)

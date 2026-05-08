@@ -24,7 +24,9 @@ fn override_selected_default_video_id() {
     }
     fn fetch_handler(request: Request) -> TryEnvFuture<Box<dyn Any + Send>> {
         match request {
-            Request { url, .. } if url == "https://v3-cinemeta.strem.io/meta/movie/tt1.json" => {
+            Request { url, .. }
+                if url == "https://v3-cinemeta.strem.io/meta/movie/tt1/language=eng.json" =>
+            {
                 future::ok(Box::new(ResourceResponse::Meta {
                     meta: MetaItem {
                         preview: MetaItemPreview {
@@ -123,7 +125,9 @@ fn override_selected_meta_id() {
     }
     fn fetch_handler(request: Request) -> TryEnvFuture<Box<dyn Any + Send>> {
         match request {
-            Request { url, .. } if url == "https://v3-cinemeta.strem.io/meta/movie/tt1.json" => {
+            Request { url, .. }
+                if url == "https://v3-cinemeta.strem.io/meta/movie/tt1/language=eng.json" =>
+            {
                 future::ok(Box::new(ResourceResponse::Meta {
                     meta: MetaItem {
                         preview: MetaItemPreview {

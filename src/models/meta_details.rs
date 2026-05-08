@@ -23,7 +23,7 @@ use crate::{
         Effect, EffectFuture, Effects, Env, EnvError, EnvFutureExt, UpdateWithCtx,
     },
     types::{
-        addon::{AggrRequest, ResourcePath, ResourceRequest},
+        addon::{AggrRequest, ExtraValue, ResourcePath, ResourceRequest},
         api::{DatastoreCommand, DatastoreRequest},
         library::{LibraryBucket, LibraryItem},
         profile::{AuthKey, Profile},
@@ -461,15 +461,29 @@ fn meta_items_update<E: Env + 'static>(
     profile: &Profile,
 ) -> Effects {
     match selected {
-        Some(Selected { meta_path, .. }) => resources_update::<E, _>(
-            meta_items,
-            ResourcesAction::ResourcesRequested {
-                request: &AggrRequest::AllOfResource(meta_path.to_owned()),
-                addons: &profile.addons,
-                // use existing loaded MetaItems instead of making a request every time.
-                force: false,
-            },
-        ),
+        Some(Selected { meta_path, .. }) => {
+            let mut localized_meta_path = meta_path.to_owned();
+            if !profile.settings.interface_language.is_empty()
+                && !localized_meta_path
+                    .extra
+                    .iter()
+                    .any(|extra| extra.name == "language")
+            {
+                localized_meta_path.extra.push(ExtraValue {
+                    name: "language".to_owned(),
+                    value: profile.settings.interface_language.to_owned(),
+                });
+            }
+            resources_update::<E, _>(
+                meta_items,
+                ResourcesAction::ResourcesRequested {
+                    request: &AggrRequest::AllOfResource(localized_meta_path),
+                    addons: &profile.addons,
+                    // use existing loaded MetaItems instead of making a request every time.
+                    force: false,
+                },
+            )
+        }
         _ => eq_update(meta_items, vec![]),
     }
 }
